@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Chess Knight Pathfinding Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #3a3a3c, #1e1e20); /* Darker, more sophisticated gradient */
+            color: #e0e0e0; /* Light gray for text, good contrast on dark bg */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .container {
+            max-width: 1350px; /* Slightly wider for larger boards */
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #4CAF50; /* A vibrant green for title */
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            font-size: 2.5em;
+        }
+        
+        .controls {
+            background: rgba(255,255,255,0.03); /* Very subtle white */
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        label {
+            font-weight: 500; /* Slightly less bold */
+            font-size: 0.9em;
+            color: #a0a0a0; /* Softer gray for labels */
+        }
+        
+        input[type="number"] {
+            padding: 10px;
+            border: 1px solid #555; /* Darker border */
+            background-color: #2c2c2e; /* Dark input bg */
+            color: #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+            width: 70px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        input[type="number"]:focus {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+            outline: none;
+        }
+        
+        button {
+            padding: 10px 18px;
+            background: #4CAF50; 
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: background 0.3s, transform 0.1s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        button:disabled {
+            background: #505052; /* Darker disabled color */
+            color: #888;
+            cursor: not-allowed;
+        }
+        .controls button.reset-btn {
+            background-color: #f44336; /* Red for reset */
+        }
+        .controls button.reset-btn:hover {
+            background-color: #d32f2f;
+        }
+        
+        .visualization {
+            display: flex;
+            gap: 25px;
+            align-items: flex-start;
+        }
+        
+        .board-container {
+            flex: 2; 
+        }
+        
+        .board {
+            display: grid;
+            gap: 1px; /* Reduced gap for tighter chessboard look */
+            background: #1a1a1c; /* Very dark board background */
+            padding: 8px; /* Reduced padding */
+            border-radius: 8px; /* Softer radius */
+            box-shadow: 0 10px 35px rgba(0,0,0,0.4);
+            border: 2px solid #444; /* Border around the board itself */
+        }
+        
+        .cell {
+            width: auto; 
+            aspect-ratio: 1 / 1; 
+            display: flex;
+            flex-direction: column; /* For knight icon and number */
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: clamp(8px, 2vw, 12px); /* Adjusted for potentially more cells */
+            border-radius: 2px; /* Sharper cell radius */
+            transition: all 0.15s ease-out; /* Faster transition */
+            position: relative;
+            overflow: hidden; 
+        }
+
+        /* Chessboard base colors */
+        .cell-light-base-bg { background-color: #e6d0b0; } /* Creamy white/beige */
+        .cell-dark-base-bg  { background-color: #8c6f58; } /* Woody brown */
+
+        /* Text color for unvisited cells on chessboard pattern */
+        .cell.unvisited.cell-light-base-bg { color: #5c4033; } /* Dark brown text on light square */
+        .cell.unvisited.cell-dark-base-bg  { color: #f5f5dc; } /* Beige/off-white text on dark square */
+        
+        /* .cell.unvisited itself doesn't set a background anymore; it relies on combo with base-bg */
+
+        .cell.start { background-color: #d32f2f !important; color: white !important; animation: pulse 1.5s infinite; }
+        .cell.visited { background-color: #388e3c !important; color: white !important; } /* Slightly darker green */
+        .cell.current { background-color: #f57c00 !important; color: white !important; animation: glow 0.8s infinite alternate; } /* Orange */
+
+        .cell.potential-move-valid { box-shadow: 0 0 0 2px #66bb6a inset, 0 0 6px #66bb6a; } 
+        .cell.potential-move-invalid { box-shadow: 0 0 0 2px #ef5350 inset, 0 0 6px #ef5350; } 
+        .cell.potential-move-processing { animation: pulseBorderYellow 0.7s infinite; }
+
+        .knight-icon { font-size: clamp(14px, 2.5vw, 18px); line-height: 1; }
+        .cell-distance { font-size: clamp(8px, 1.8vw, 11px); line-height: 1.2; }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 4px #d32f2f; }
+            50% { transform: scale(1.05); box-shadow: 0 0 12px #d32f2f; }
+        }
+        @keyframes glow {
+            0% { box-shadow: inset 0 0 7px #f57c00, 0 0 4px #f57c00; }
+            100% { box-shadow: inset 0 0 13px #f57c00, 0 0 18px #f57c00; }
+        }
+        @keyframes pulseBorderYellow {
+            0% { box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.7) inset, 0 0 8px rgba(255, 193, 7, 0.7); }
+            50% { box-shadow: 0 0 0 3px rgba(255, 193, 7, 1) inset, 0 0 12px rgba(255, 193, 7, 1); }
+            100% { box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.7) inset, 0 0 8px rgba(255, 193, 7, 0.7); }
+        }
+        
+        .info-panel {
+            background: rgba(255,255,255,0.03);
+            padding: 20px;
+            border-radius: 12px;
+            min-width: 330px; 
+            flex: 1; 
+            box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .stats { margin-bottom: 20px; }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        .stat-item span:first-child { color: #b0b0b0; }
+        .stat-item span:last-child { font-weight: bold; color: #4CAF50; }
+        
+        .array-output {
+            background: #232325; /* Darker pre bg */
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em; /* Even smaller for very large arrays */
+            max-height: 280px; /* Adjusted height */
+            overflow-y: auto;
+            border: 1px solid #444;
+            white-space: pre;
+            color: #c0c0c0; /* Lighter text for pre */
+        }
+        
+        .queue-visualization { margin-top: 20px; }
+        .queue-visualization h3 { font-size: 1.1em; margin-bottom: 10px; color: #b0b0b0; }
+        .queue { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .queue-item {
+            background: #007bff; /* Blue for queue items */
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        
+        .speed-control { margin-top: 20px; margin-bottom: 20px; }
+        .speed-slider { width: 100%; margin-top: 8px; cursor: pointer; 
+            accent-color: #4CAF50; /* Style the slider thumb */
+        }
+
+        @media (max-width: 900px) {
+            .visualization { flex-direction: column; }
+            .board-container, .info-panel { width: 100%; }
+            .info-panel { min-width: unset; }
+        }
+        @media (max-width: 600px) {
+            .controls { flex-direction: column; align-items: stretch; }
+            .input-group { width: 100%; }
+            input[type="number"] { width: calc(100% - 22px); } 
+            button { width: 100%; }
+            h1 { font-size: 2em; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>♞ Advanced Knight's Path Visualizer ♞</h1>
+        
+        <div class="controls">
+            <div class="input-group">
+                <label for="boardSize">Board Size (N)</label>
+                <input type="number" id="boardSize" value="8" min="3" max="25"> {/* Max size increased */}
+            </div>
+            <div class="input-group">
+                <label for="startX">Start X (0-indexed)</label>
+                <input type="number" id="startX" value="0" min="0">
+            </div>
+            <div class="input-group">
+                <label for="startY">Start Y (0-indexed)</label>
+                <input type="number" id="startY" value="0" min="0">
+            </div>
+            <button onclick="initializeBoard()">Initialize/Set Params</button>
+            <button onclick="startVisualization()" id="startBtn">Start BFS</button>
+            <button onclick="resetBoard()" class="reset-btn">Reset Board State</button>
+        </div>
+        
+        <div class="visualization">
+            <div class="board-container">
+                <div id="chessBoardDisplay" class="board"></div>
+            </div>
+            
+            <div class="info-panel">
+                <div class="stats">
+                    {/* ... stats items remain the same ... */}
+                    <div class="stat-item">
+                        <span>Board Size:</span>
+                        <span id="boardSizeDisplay">8x8</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Start Position:</span>
+                        <span id="startPosDisplay">(0, 0)</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Total Cells Reached:</span>
+                        <span id="totalCellsReachedCountDisplay">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Queue Length:</span>
+                        <span id="queueLengthDisplay">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Distance of Current Cell:</span>
+                        <span id="currentDistanceDisplay">-</span>
+                    </div>
+                     <div class="stat-item">
+                        <span>Python's `num_squares_path_found`:</span>
+                        <span id="pythonNumSquaresDisplay">0</span>
+                    </div>
+                </div>
+                
+                <div class="speed-control">
+                    <label for="speedSlider">Animation Speed (Slow  <--> Fast)</label>
+                    <input type="range" id="speedSlider" class="speed-slider" min="50" max="1000" value="300" step="50">
+                </div>
+                
+                <div class="queue-visualization">
+                    <h3>Queue (Front → Back, max 10 shown):</h3>
+                    <div id="queueDisplay" class="queue"></div>
+                </div>
+                
+                <div class="array-output">
+                    <h3>Chess Board Array State:</h3>
+                    <pre id="arrayOutput"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let N = 8;
+        let chessBoardData = []; 
+        let queue = [];
+        let startX = 0, startY = 0;
+        
+        let totalCellsReachedCount = 0; 
+        let pythonEquivalentNumSquaresPathFound = 0; 
+
+        let isRunning = false;
+        let animationDelay = 700; // Default, slider will update from 1050-val
+        
+        const dirMoves = [[-2,1],[-1,2],[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1]];
+        
+        function updateInputsFromCurrentState() {
+            document.getElementById('boardSize').value = N;
+            document.getElementById('startX').value = startX;
+            document.getElementById('startY').value = startY;
+        }
+
+        function initializeBoard() {
+            if (isRunning) return;
+            N = parseInt(document.getElementById('boardSize').value);
+            startX = parseInt(document.getElementById('startX').value);
+            startY = parseInt(document.getElementById('startY').value);
+            
+            document.getElementById('startX').max = N - 1;
+            document.getElementById('startY').max = N - 1;
+
+            if (N <= 2) {
+                alert('Board size (N) must be greater than 2.');
+                return;
+            }
+             // Ensure startX and startY are within the new board bounds
+            startX = Math.max(0, Math.min(startX, N - 1));
+            startY = Math.max(0, Math.min(startY, N - 1));
+            updateInputsFromCurrentState(); // Reflect corrected values in input fields
+
+            if (!(0 <= startX && startX < N && 0 <= startY && startY < N)) {
+                // This case should ideally not be hit if above correction works
+                alert(`Invalid start position (${startX}, ${startY}) for an ${N}x${N} board. Please correct.`);
+                return;
+            }
+            
+            chessBoardData = Array(N).fill(null).map(() => Array(N).fill(-1));
+            queue = [];
+            
+            totalCellsReachedCount = 0;
+            pythonEquivalentNumSquaresPathFound = 0; 
+
+            chessBoardData[startX][startY] = 0;
+            queue.push([startX, startY]);
+            totalCellsReachedCount = 1;
+            pythonEquivalentNumSquaresPathFound = 1; 
+            
+            createBoardHTML();
+            updateAllDisplays();
+            document.getElementById('startBtn').disabled = false;
+        }
+        
+        function createBoardHTML() {
+            const boardElement = document.getElementById('chessBoardDisplay');
+            boardElement.innerHTML = '';
+            boardElement.style.gridTemplateColumns = `repeat(${N}, minmax(0, 1fr))`;
+            
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell unvisited'; // Base classes
+                    cell.id = `cell-${r}-${c}`;
+
+                    // Add chessboard pattern classes
+                    if ((r + c) % 2 === 0) {
+                        cell.classList.add('cell-light-base-bg');
+                    } else {
+                        cell.classList.add('cell-dark-base-bg');
+                    }
+                    
+                    let cellContentHTML = `<span class="cell-distance">${chessBoardData[r][c]}</span>`;
+                    if (r === startX && c === startY && chessBoardData[r][c] === 0) {
+                        cell.classList.remove('unvisited'); // Start is not "unvisited" in the typical sense
+                        cell.classList.add('start');
+                        cellContentHTML = `<span class="knight-icon">♞</span><span class="cell-distance">${chessBoardData[r][c]}</span>`;
+                    }
+                    cell.innerHTML = cellContentHTML;
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function clearCellHighlightsAndPotentialMoves() {
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cellElement = document.getElementById(`cell-${r}-${c}`);
+                    if (cellElement) {
+                        cellElement.classList.remove('current', 'potential-move-valid', 'potential-move-invalid', 'potential-move-processing');
+                        // Re-apply start if it's the start cell and currently has 0, ensuring it's not accidentally cleared
+                        if (r === startX && c === startY && chessBoardData[r][c] === 0 && !cellElement.classList.contains('start')) {
+                            cellElement.classList.add('start');
+                             // Ensure content is correct for start cell if it was overridden
+                            if (!cellElement.querySelector('.knight-icon')) {
+                                cellElement.innerHTML = `<span class="knight-icon">♞</span><span class="cell-distance">0</span>`;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        function highlightCell(r, c, typeClass) {
+            const cellElement = document.getElementById(`cell-${r}-${c}`);
+            if (cellElement) {
+                if (typeClass === 'current') {
+                    cellElement.classList.remove('visited', 'start', 'unvisited');
+                     // If it was a base colored cell, ensure those don't conflict with 'current' styling
+                    cellElement.classList.remove('cell-light-base-bg', 'cell-dark-base-bg');
+                }
+                cellElement.classList.add(typeClass);
+            }
+        }
+
+        function updateCellDisplay(r, c, distance, newClass = 'visited') {
+            const cellElement = document.getElementById(`cell-${r}-${c}`);
+            if (cellElement) {
+                // Remove all potentially conflicting classes first
+                cellElement.classList.remove(
+                    'unvisited', 'start', 'current', 
+                    'potential-move-valid', 'potential-move-invalid', 'potential-move-processing',
+                    'cell-light-base-bg', 'cell-dark-base-bg' // Remove base colors before applying strong state colors
+                );
+                cellElement.classList.add(newClass);
+                
+                let contentHTML = `<span class="cell-distance">${distance}</span>`;
+                if (newClass === 'start' || (r === startX && c === startY && distance === 0)) {
+                     contentHTML = `<span class="knight-icon">♞</span><span class="cell-distance">${distance}</span>`;
+                     if(!cellElement.classList.contains('start')) cellElement.classList.add('start'); // Ensure start always has start class
+                } else if (newClass === 'current') {
+                     contentHTML = `<span class="knight-icon">♞</span><span class="cell-distance">${distance}</span>`;
+                }
+                cellElement.innerHTML = contentHTML;
+
+                // If the newClass is 'visited', we need to re-apply the base chessboard color if we want pattern under visited numbers
+                // However, current design is solid color for visited. If pattern desired underneath, logic would be:
+                // if (newClass === 'visited') {
+                //    if ((r + c) % 2 === 0) cellElement.classList.add('cell-light-base-bg-visited-variant');
+                //    else cellElement.classList.add('cell-dark-base-bg-visited-variant');
+                // }
+            }
+        }
+        
+        async function startVisualization() {
+            if (isRunning) return;
+            if (queue.length === 0) {
+                 if(totalCellsReachedCount > 0 && chessBoardData[startX][startY] !== -1) alert("BFS already completed or nothing left in queue.");
+                 else if (chessBoardData[startX][startY] === -1) alert("Start position is invalid or board not initialized correctly. Please Initialize.");
+                 else alert("Initialize board first or ensure start position is valid.");
+                return;
+            }
+            
+            isRunning = true;
+            document.getElementById('startBtn').disabled = true;
+            
+            while (queue.length > 0) {
+                clearCellHighlightsAndPotentialMoves();
+
+                const [currR, currC] = queue.shift(); 
+                const currentDist = chessBoardData[currR][currC];
+                
+                pythonEquivalentNumSquaresPathFound = currentDist;
+                
+                updateCellDisplay(currR, currC, currentDist, 'current');
+                document.getElementById('currentDistanceDisplay').textContent = currentDist;
+                updateQueueDisplay(); // Update queue display immediately
+                updatePythonNumSquaresDisplay(); 
+                updateArrayOutput(); // Update array output at start of processing node
+
+                let f = 0; 
+                const tempPotentialMoves = [];
+
+                for (const [dr, dc] of dirMoves) {
+                    const nextR = currR + dr;
+                    const nextC = currC + dc;
+                    let isValidTarget = false;
+
+                    if (0 <= nextR && nextR < N && 0 <= nextC && nextC < N) {
+                        if (chessBoardData[nextR][nextC] === -1) {
+                            highlightCell(nextR, nextC, 'potential-move-valid');
+                            isValidTarget = true;
+                        } else {
+                            highlightCell(nextR, nextC, 'potential-move-invalid');
+                        }
+                    } 
+                    tempPotentialMoves.push({nextR, nextC, dr, dc, isValidTarget});
+                }
+                 // Short pause to show all potential moves before iterating
+                await new Promise(resolve => setTimeout(resolve, animationDelay * 0.4));
+
+
+                for (const move of tempPotentialMoves) {
+                    const {nextR, nextC, isValidTarget} = move;
+
+                    if (0 <= nextR && nextR < N && 0 <= nextC && nextC < N) { 
+                        highlightCell(nextR, nextC, 'potential-move-processing');
+                        await new Promise(resolve => setTimeout(resolve, animationDelay * 0.4)); // Pause for current processing move
+                    }
+
+                    if (isValidTarget) { 
+                        f = 1;
+                        chessBoardData[nextR][nextC] = currentDist + 1;
+                        queue.push([nextR, nextC]);
+                        
+                        totalCellsReachedCount++;
+                        pythonEquivalentNumSquaresPathFound++; 
+
+                        updateCellDisplay(nextR, nextC, currentDist + 1, 'visited');
+                        updateQueueDisplay(); // Update queue as items are added
+                        updatePythonNumSquaresDisplay();
+                        updateArrayOutput(); // Update array as it changes
+                    }
+                    
+                    // Clean up 'processing' highlight, revert to valid/invalid or base
+                    if (0 <= nextR && nextR < N && 0 <= nextC && nextC < N) {
+                       const cellEl = document.getElementById(`cell-${nextR}-${nextC}`);
+                       if(cellEl) cellEl.classList.remove('potential-move-processing');
+                        // Re-apply the correct state if it wasn't just turned 'visited'
+                        if (!isValidTarget || chessBoardData[nextR][nextC] !== currentDist + 1) {
+                           if (0 <= nextR && nextR < N && 0 <= nextC && nextC < N) { // Still on board
+                                if (chessBoardData[nextR][nextC] === -1) { // If it's still unvisited (e.g. another path might reach it later)
+                                   highlightCell(nextR, nextC, 'potential-move-valid'); // This should not happen if isValidTarget was false and it was -1
+                                } else if (chessBoardData[nextR][nextC] !== -1) { // If it was already visited by another path or is start
+                                   highlightCell(nextR, nextC, 'potential-move-invalid');
+                                }
+                           }
+                        }
+                    }
+                    // Small visual update for stats panel if desired frequently
+                    document.getElementById('totalCellsReachedCountDisplay').textContent = totalCellsReachedCount;
+                    document.getElementById('pythonNumSquaresDisplay').textContent = pythonEquivalentNumSquaresPathFound;
+                }
+                // Mark current cell as visited (or start if it's the start cell)
+                 if (currR === startX && currC === startY) {
+                    updateCellDisplay(currR, currC, currentDist, 'start');
+                } else {
+                    updateCellDisplay(currR, currC, currentDist, 'visited');
+                }
+                await new Promise(resolve => setTimeout(resolve, animationDelay * 0.2)); // Final pause for the processed cell
+            }
+            
+            clearCellHighlightsAndPotentialMoves(); 
+            isRunning = false;
+            document.getElementById('startBtn').disabled = (queue.length === 0); 
+            alert("BFS Complete!");
+            // Final log to console
+            console.log('Final chessBoardData:');
+            chessBoardData.forEach(row => console.log(JSON.parse(JSON.stringify(row))));
+            console.log('Final Python Equivalent num_squares_path_found:', pythonEquivalentNumSquaresPathFound);
+        }
+        
+        function updateAllDisplays() {
+            document.getElementById('boardSizeDisplay').textContent = `${N}x${N}`;
+            document.getElementById('startPosDisplay').textContent = `(${startX}, ${startY})`;
+            document.getElementById('totalCellsReachedCountDisplay').textContent = totalCellsReachedCount;
+            // currentDistanceDisplay is updated within the loop
+            updateQueueDisplay();
+            updateArrayOutput();
+            updatePythonNumSquaresDisplay();
+        }
+
+        function updateQueueDisplay() {
+            document.getElementById('queueLengthDisplay').textContent = queue.length;
+            const queueDisplayElement = document.getElementById('queueDisplay');
+            queueDisplayElement.innerHTML = '';
+            queue.slice(0, 10).forEach(([r, c]) => {
+                const item = document.createElement('div');
+                item.className = 'queue-item';
+                item.textContent = `(${r},${c})`;
+                queueDisplayElement.appendChild(item);
+            });
+            if (queue.length > 10) {
+                const more = document.createElement('div');
+                more.className = 'queue-item';
+                more.textContent = `...+${queue.length - 10}`;
+                queueDisplayElement.appendChild(more);
+            }
+        }
+        
+        function updateArrayOutput() {
+            let output = '';
+            if (chessBoardData.length > 0) {
+                // Pad with spaces for alignment, N can go up to 25, distances can be 2 digits
+                const padSize = N > 9 || chessBoardData.some(row => row.some(val => val > 9 || val < -1)) ? 3 : 2;
+                for (const row of chessBoardData) {
+                    output += '[' + row.map(val => val.toString().padStart(padSize)).join(', ') + ']\n';
+                }
+            } else {
+                output = "Board not initialized or invalid.\n";
+            }
+            output += `\npythonEquivalentNumSquaresPathFound: ${pythonEquivalentNumSquaresPathFound}`;
+            document.getElementById('arrayOutput').textContent = output;
+        }
+
+        function updatePythonNumSquaresDisplay() {
+            document.getElementById('pythonNumSquaresDisplay').textContent = pythonEquivalentNumSquaresPathFound;
+        }
+
+        function resetBoard() { 
+            if (isRunning) {
+                // A proper stop mechanism would involve a flag checked in the async loops
+                // For now, just prevent reset during active run.
+                alert("Visualization is running. Please wait for it to complete or refresh the page to stop.");
+                return;
+            }
+            initializeBoard(); 
+        }
+        
+        document.getElementById('speedSlider').addEventListener('input', function() {
+            // Slider value: 50 (slow) to 1000 (fast)
+            // We want delay to be high for slow, low for fast.
+            // Example: maxDelay = 1000ms, minDelay = 50ms
+            // delay = maxDelay - (sliderValue - minSliderValue) * ( (maxDelay-minDelay) / (maxSliderValue-minSliderValue) )
+            // Or simpler: animationDelay = 1050 - parseInt(this.value); (as before)
+            animationDelay = 1050 - parseInt(this.value); 
+        });
+        
+        window.onload = function() {
+            // Set initial animationDelay based on slider's default value
+            animationDelay = 1050 - parseInt(document.getElementById('speedSlider').value);
+            updateInputsFromCurrentState(); 
+            initializeBoard(); 
+        };
+    </script>
+</body>
+</html>
